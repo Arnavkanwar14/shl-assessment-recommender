@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.shl.com)",
+      "WebSearch",
+      "WebFetch(domain:ondemand.talevation.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -c \"import requests; r = requests.get\\('https://www.shl.com/solutions/products/product-catalog/?start=0&type=1', headers={'User-Agent':'Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36', 'Accept':'text/html,application/xhtml+xml'}, timeout=15, allow_redirects=True\\); print\\(r.status_code, r.url, len\\(r.text\\)\\); print\\(r.text[:3000]\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -m playwright install chromium)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "PowerShell(pip install python-docx -q)"
+    ]
+  }
+}
