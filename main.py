@@ -1,17 +1,27 @@
 """FastAPI application for the SHL Assessment Recommender."""
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 
+import retrieval
 import agent
 
 logger = logging.getLogger("uvicorn.error")
 
-app = FastAPI(title="SHL Assessment Recommender", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pre-load TF-IDF index at startup so first request is fast
+    retrieval._ensure_loaded()
+    logger.info("Catalog index loaded: %d items", len(retrieval._catalog))
+    yield
+
+
+app = FastAPI(title="SHL Assessment Recommender", version="1.0.0", lifespan=lifespan)
 
 
 class Message(BaseModel):

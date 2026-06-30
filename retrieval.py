@@ -1,11 +1,9 @@
-"""FAISS-based semantic retrieval over the SHL catalog."""
+"""TF-IDF based semantic retrieval over the SHL catalog."""
 
 import json
-import os
+import re
 from pathlib import Path
 from typing import Optional
-
-import numpy as np
 
 CATALOG_PATH = Path(__file__).parent / "data" / "shl_catalog.json"
 
@@ -44,81 +42,66 @@ def _load_catalog():
         remote = entry.get("remote", "yes")
         adaptive = entry.get("adaptive", "no")
 
-        # Build a rich text blob for embedding
-        text_parts = [name]
+        text_parts = [name, name]  # weight name higher
         if description:
             text_parts.append(description)
         if keys:
-            text_parts.append("Categories: " + ", ".join(keys))
+            text_parts.append(" ".join(keys))
         if job_levels:
-            text_parts.append("Job levels: " + ", ".join(job_levels))
+            text_parts.append(" ".join(job_levels))
         if languages:
-            text_parts.append("Languages: " + ", ".join(languages[:5]))
-        if duration:
-            text_parts.append("Duration: " + duration)
+            text_parts.append(" ".join(languages[:5]))
 
-        items.append(
-            {
-                "name": name,
-                "url": link,
-                "test_type": test_type,
-                "keys": keys,
-                "job_levels": job_levels,
-                "languages": languages,
-                "duration": duration,
-                "remote": remote,
-                "adaptive": adaptive,
-                "description": description,
-                "text": " | ".join(text_parts),
-            }
-        )
+        items.append({
+            "name": name,
+            "url": link,
+            "test_type": test_type,
+            "keys": keys,
+            "job_levels": job_levels,
+            "languages": languages,
+            "duration": duration,
+            "remote": remote,
+            "adaptive": adaptive,
+            "description": description,
+            "text": " ".join(text_parts),
+        })
     return items
 
 
-# ── lazy globals ──────────────────────────────────────────────────────────────
+# Lazy globals
 _catalog: Optional[list] = None
-_index = None
-_model = None
+_vectorizer = None
+_matrix = None
 
 
 def _ensure_loaded():
-    global _catalog, _index, _model
+    global _catalog, _vectorizer, _matrix
     if _catalog is not None:
         return
 
-    from sentence_transformers import SentenceTransformer
-    import faiss
+    from sklearn.feature_extraction.text import TfidfVectorizer
 
     _catalog = _load_catalog()
-    _model = SentenceTransformer("all-MiniLM-L6-v2")
-
     texts = [item["text"] for item in _catalog]
-    embeddings = _model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
-    embeddings = embeddings.astype(np.float32)
 
-    dim = embeddings.shape[1]
-    _index = faiss.IndexFlatIP(dim)
-    # Normalise for cosine similarity
-    faiss.normalize_L2(embeddings)
-    _index.add(embeddings)
+    _vectorizer = TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_features=20000,
+        sublinear_tf=True,
+    )
+    _matrix = _vectorizer.fit_transform(texts)
 
 
 def search(query: str, top_k: int = 20) -> list[dict]:
-    """Return up to top_k catalog items most relevant to query."""
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+
     _ensure_loaded()
 
-    import faiss
-
-    qvec = _model.encode([query], show_progress_bar=False, convert_to_numpy=True).astype(np.float32)
-    faiss.normalize_L2(qvec)
-    _, idxs = _index.search(qvec, top_k)
-
-    results = []
-    for i in idxs[0]:
-        if i < 0 or i >= len(_catalog):
-            continue
-        results.append(_catalog[i])
-    return results
+    qvec = _vectorizer.transform([query])
+    scores = cosine_similarity(qvec, _matrix)[0]
+    top_idxs = np.argsort(scores)[::-1][:top_k]
+    return [_catalog[i] for i in top_idxs if scores[i] > 0]
 
 
 def get_all() -> list[dict]:

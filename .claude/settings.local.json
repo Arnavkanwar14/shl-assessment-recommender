@@ -11,7 +11,10 @@
       "Bash(python -m playwright install chromium)",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "PowerShell(pip install python-docx -q)"
+      "PowerShell(pip install python-docx -q)",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "PowerShell(winget install --id GitHub.cli -e --silent 2>&1)"
     ]
   }
 }
