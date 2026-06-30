@@ -52,8 +52,8 @@ def health():
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    if len(request.messages) > 16:
-        raise HTTPException(status_code=400, detail="Too many messages (max 16 per request).")
+    if len(request.messages) > 8:
+        raise HTTPException(status_code=400, detail="Too many messages (max 8 per conversation).")
 
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
