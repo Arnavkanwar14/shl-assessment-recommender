@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from typing import Any
 
 import google.generativeai as genai
@@ -128,7 +129,18 @@ def chat(messages: list[dict[str, Any]]) -> dict:
     last_user_msg = messages[-1]["content"]
 
     convo = model.start_chat(history=gemini_history)
-    response = convo.send_message(last_user_msg)
+
+    # Retry once on rate-limit (429)
+    for attempt in range(2):
+        try:
+            response = convo.send_message(last_user_msg)
+            break
+        except Exception as exc:
+            if attempt == 0 and "429" in str(exc):
+                time.sleep(65)
+                convo = model.start_chat(history=gemini_history)
+            else:
+                raise
 
     raw = response.text
 
