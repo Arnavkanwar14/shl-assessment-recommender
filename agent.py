@@ -1,15 +1,21 @@
-"""Conversational agent powered by Claude."""
+"""Conversational agent powered by Google Gemini."""
 
 import json
 import os
 from typing import Any
 
-import anthropic
+import google.generativeai as genai
 
-from retrieval import search, get_all
+from retrieval import search
 
-CLIENT = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-MODEL = "claude-sonnet-4-6"
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+MODEL = genai.GenerativeModel(
+    model_name="gemini-2.5-flash-lite",
+    generation_config=genai.GenerationConfig(
+        temperature=0.2,
+        max_output_tokens=2048,
+    ),
+)
 
 SYSTEM_PROMPT = """You are an SHL Assessment Recommender — an expert assistant that helps HR professionals and hiring managers select the right SHL Individual Test Solutions from the SHL product catalog.
 
@@ -43,7 +49,7 @@ Politely decline legal/compliance interpretation, general hiring advice, or prom
 Professional, concise, expert. No filler phrases. Short replies are fine. Never fabricate catalog data.
 
 ## Response Format (JSON ONLY)
-You MUST respond with valid JSON only — no markdown, no prose outside the JSON. Structure:
+You MUST respond with valid JSON only — no markdown fences, no prose outside the JSON. Structure:
 
 {
   "reply": "Your conversational reply here",
@@ -60,7 +66,7 @@ You MUST respond with valid JSON only — no markdown, no prose outside the JSON
 
 ## Critical rules
 - NEVER make up assessment names or URLs
-- ALL URLs must be from the catalog context provided
+- ALL URLs must be exactly as provided in the catalog context
 - Return null for recommendations when asking a clarifying question or answering a comparison with no list change
 - Always include the full current shortlist when the list has changed or been confirmed"""
 
@@ -86,17 +92,14 @@ def _format_catalog_context(items: list[dict]) -> str:
 
 
 def _build_query(messages: list[dict]) -> str:
-    """Concatenate the last few user messages into a search query."""
     user_texts = [m["content"] for m in messages if m["role"] == "user"]
     return " ".join(user_texts[-3:])
 
 
 def _parse_response(text: str) -> dict:
-    """Parse Claude's JSON response, stripping any accidental markdown fences."""
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
-        # drop first and last fence lines
         text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
     return json.loads(text)
 
@@ -115,36 +118,38 @@ def chat(messages: list[dict[str, Any]]) -> dict:
     catalog_items = search(query, top_k=25)
     catalog_context = _format_catalog_context(catalog_items)
 
-    system = SYSTEM_PROMPT + "\n\n" + catalog_context
+    full_system = SYSTEM_PROMPT + "\n\n" + catalog_context
 
-    response = CLIENT.messages.create(
-        model=MODEL,
-        max_tokens=2048,
-        system=system,
-        messages=messages,
+    # Convert to Gemini format
+    gemini_history = []
+    for m in messages[:-1]:
+        role = "user" if m["role"] == "user" else "model"
+        gemini_history.append({"role": role, "parts": [m["content"]]})
+
+    last_user_msg = messages[-1]["content"]
+
+    convo = MODEL.start_chat(history=gemini_history)
+    response = convo.send_message(
+        f"{full_system}\n\n---\nUser: {last_user_msg}" if not gemini_history
+        else last_user_msg
     )
 
-    raw = response.content[0].text
+    raw = response.text
 
     try:
         result = _parse_response(raw)
     except (json.JSONDecodeError, IndexError):
-        # Fallback: return raw text as reply with no recommendations
         result = {
             "reply": raw,
             "recommendations": None,
             "end_of_conversation": False,
         }
 
-    # Normalise structure
     result.setdefault("reply", "")
     result.setdefault("recommendations", None)
     result.setdefault("end_of_conversation", False)
-
-    # Ensure boolean
     result["end_of_conversation"] = bool(result["end_of_conversation"])
 
-    # Validate recommendations shape
     recs = result["recommendations"]
     if recs is not None:
         cleaned = []
