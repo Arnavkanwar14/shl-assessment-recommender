@@ -111,7 +111,7 @@ def chat(messages: list[dict[str, Any]]) -> dict:
 
     # Build model with system instruction (catalog context injected per turn)
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
+        model_name="gemini-2.0-flash",
         system_instruction=SYSTEM_PROMPT + "\n\n" + catalog_context,
         generation_config=genai.GenerationConfig(
             temperature=0.2,
