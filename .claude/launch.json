@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "shortsmaker-web",
+      "runtimeExecutable": "C:\\Users\\bifro\\OneDrive\\Desktop\\shortsmaker\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-c", "import sys; sys.path.insert(0, r'C:\\Users\\bifro\\OneDrive\\Desktop\\shortsmaker'); from shortsmaker.webui import serve; serve()"],
+      "port": 8000
+    }
+  ]
+}
